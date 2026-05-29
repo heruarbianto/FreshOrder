@@ -88,6 +88,12 @@ enum TipeMutasiStok {
   KOREKSI
   RETUR
 }
+enum OtpPurpose {
+  REGISTER
+  FORGOT_PASSWORD
+  LOGIN
+  CHANGE_EMAIL
+}
 
 // ======================================================
 // USER
@@ -598,3 +604,21 @@ model LaporanLabaRugi {
 }
 
 
+model EmailOtp {
+  id          String   @id @default(cuid())
+
+  email       String
+  otp         String
+
+  purpose     OtpPurpose
+
+  attempts    Int      @default(0)
+
+  expiredAt   DateTime
+  verifiedAt  DateTime?
+
+  createdAt   DateTime @default(now())
+
+  @@index([email])
+  @@index([expiredAt])
+}
