@@ -13,3 +13,588 @@ datasource db {
 }
 
 
+// ======================================================
+// ENUM
+// ======================================================
+
+enum RoleUser {
+  CUSTOMER
+  ADMIN
+  KURIR
+}
+
+enum TipePembelian {
+  FIXED
+  NOMINAL
+}
+
+enum MetodePembayaran {
+  COD
+  PAYMENT_GATEWAY
+}
+
+enum StatusPembayaran {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+  CANCELED
+}
+
+enum StatusPesanan {
+  PENDING
+  DIKONFIRMASI
+  DIBELANJAKAN
+  DIKEMAS
+  DIANTAR
+  SELESAI
+  DIBATALKAN
+}
+
+enum ProviderPembayaran {
+  MIDTRANS
+  XENDIT
+  TRIPAY
+  MANUAL
+  COD
+}
+
+enum StatusPengiriman {
+  MENUNGGU
+  DIANTAR
+  SAMPAI
+  SELESAI
+  GAGAL
+}
+
+enum JenisVoucher {
+  PERSEN
+  NOMINAL
+}
+
+enum TipeJadwalPengiriman {
+  SLOT_JADWAL
+  KAPAN_SAJA
+  CUSTOM
+}
+
+enum TipeMutasiStok {
+  MASUK
+  KELUAR
+  RESERVED
+  RELEASE
+  KOREKSI
+  RETUR
+}
+
+// ======================================================
+// USER
+// ======================================================
+
+model User {
+  id BigInt @id @default(autoincrement())
+  nama String
+  no_hp String @unique
+  email String? @unique
+  password String
+  role RoleUser
+  foto_profil String?
+  aktif Boolean @default(true)
+  terakhir_login DateTime?
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+
+  alamat Alamat[]
+  keranjang Keranjang[]
+  pesanan Pesanan[] @relation("CustomerPesanan")
+  pesanan_kurir Pesanan[] @relation("KurirPesanan")
+  pengiriman Pengiriman[]
+  notifikasi Notifikasi[]
+  pengeluaran Pengeluaran[]
+  log_status LogStatusPesanan[]
+  stok_mutasi StokMutasi[]
+}
+
+// ======================================================
+// ALAMAT
+// ======================================================
+
+model Alamat {
+  id BigInt @id @default(autoincrement())
+  user_id BigInt
+  label String
+  nama_penerima String
+  no_hp_penerima String
+  provinsi String
+  kota String
+  kecamatan String
+  kelurahan String
+  kode_pos String
+  detail_alamat String
+  catatan String?
+  latitude Float
+  longitude Float
+  default_alamat Boolean @default(false)
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  pesanan Pesanan[]
+}
+
+// ======================================================
+// KATEGORI
+// ======================================================
+
+model Kategori {
+  id BigInt @id @default(autoincrement())
+  nama String
+  icon String?
+  aktif Boolean @default(true)
+  dibuat_pada DateTime @default(now())
+
+  produk Produk[]
+}
+
+// ======================================================
+// PRODUK
+// ======================================================
+
+model Produk {
+  id BigInt @id @default(autoincrement())
+  kategori_id BigInt
+  nama String
+  slug String @unique
+  tipe_pembelian TipePembelian
+  satuan String?
+  harga_default Int?
+  gambar String?
+  deskripsi String?
+  tersedia Boolean @default(true)
+  aktif Boolean @default(true)
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+
+  kategori Kategori @relation(fields: [kategori_id], references: [id])
+  harga HargaProduk[]
+  stok StokProduk?
+  item_keranjang ItemKeranjang[]
+  item_pesanan ItemPesanan[]
+  stok_mutasi StokMutasi[]
+}
+
+// ======================================================
+// HARGA PRODUK
+// ======================================================
+
+model HargaProduk {
+  id BigInt @id @default(autoincrement())
+  produk_id BigInt
+  harga_modal Int
+  harga_jual Int
+  tanggal_berlaku DateTime
+  dibuat_pada DateTime @default(now())
+
+  produk Produk @relation(fields: [produk_id], references: [id], onDelete: Cascade)
+}
+
+// ======================================================
+// STOK PRODUK + MUTASI (BARU & LEBIH BAIK)
+// ======================================================
+
+model StokProduk {
+  id BigInt @id @default(autoincrement())
+  produk_id BigInt @unique
+  jumlah_stok Float @default(0)        // Stok fisik tersedia
+  stok_reserved Float @default(0)      // Stok yang sudah direservasi (dipesan)
+  satuan_stok String
+  diupdate_pada DateTime @updatedAt
+
+  produk Produk @relation(fields: [produk_id], references: [id], onDelete: Cascade)
+}
+
+model StokMutasi {
+  id BigInt @id @default(autoincrement())
+  produk_id BigInt
+  tipe_mutasi TipeMutasiStok
+  jumlah Float
+  keterangan String
+  referensi_id BigInt?        // ID Pesanan / Pembelian dll
+  referensi_tipe String?      // "PESANAN", "PEMBELIAN", dll
+  user_id BigInt?
+  dibuat_pada DateTime @default(now())
+
+  produk Produk @relation(fields: [produk_id], references: [id])
+  user User? @relation(fields: [user_id], references: [id])
+}
+
+// ======================================================
+// KERANJANG
+// ======================================================
+
+model Keranjang {
+  id BigInt @id @default(autoincrement())
+  user_id BigInt
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  item ItemKeranjang[]
+}
+
+model ItemKeranjang {
+  id BigInt @id @default(autoincrement())
+  keranjang_id BigInt
+  produk_id BigInt
+  tipe_pembelian TipePembelian
+  qty Float?
+  harga_satuan Int?
+  nominal Int?
+  qty_nominal Int?
+  subtotal Int
+  catatan String?
+  dibuat_pada DateTime @default(now())
+
+  keranjang Keranjang @relation(fields: [keranjang_id], references: [id], onDelete: Cascade)
+  produk Produk @relation(fields: [produk_id], references: [id])
+}
+
+// ======================================================
+// SLOT PENGIRIMAN & PENGATURAN ONGKIR
+// ======================================================
+
+model SlotPengiriman {
+  id BigInt @id @default(autoincrement())
+  nama String
+  hari Int
+  jam_mulai String
+  jam_selesai String
+  maksimal_pesanan Int
+  aktif Boolean @default(true)
+  dibuat_pada DateTime @default(now())
+
+  pesanan Pesanan[]
+}
+
+model PengaturanOngkir {
+  id BigInt @id @default(autoincrement())
+  nama String
+  jarak_minimal_km Float
+  ongkir_minimal Int
+  biaya_per_km Int
+  radius_maksimal_km Float
+  aktif Boolean @default(true)
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+}
+
+// ======================================================
+// PENGATURAN TOKO (SUDAH DITAMBAH FITUR BUKA/TUTUP)
+// ======================================================
+
+model PengaturanToko {
+  id BigInt @id @default(autoincrement())
+  nama_toko String
+  nomor_whatsapp String
+  latitude_toko Float
+  longitude_toko Float
+  radius_pengiriman_km Float
+  minimum_order Int
+  biaya_layanan Int
+  jam_buka String
+  jam_tutup String
+
+  // === FITUR TOKO BUKA / TUTUP ===
+  status_toko Boolean @default(true)           // true = BUKA
+  tutup_sementara Boolean @default(false)
+  alasan_tutup String?
+  tanggal_tutup_mulai DateTime?
+  tanggal_tutup_sampai DateTime?
+
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+}
+
+// ======================================================
+// PESANAN
+// ======================================================
+
+model Pesanan {
+  id BigInt @id @default(autoincrement())
+  nomor_invoice String @unique
+
+  user_id BigInt
+  alamat_id BigInt
+  kurir_id BigInt?
+
+  metode_pembayaran MetodePembayaran
+  status_pembayaran StatusPembayaran
+  status_pesanan StatusPesanan
+
+  tipe_jadwal TipeJadwalPengiriman
+  slot_pengiriman_id BigInt?
+  tanggal_custom DateTime?
+
+  jarak_km Float?
+  biaya_pengiriman Int
+
+  subtotal Int
+  biaya_layanan Int
+  biaya_aplikasi Int
+  diskon Int
+  total_akhir Int
+
+  catatan_customer String?
+  catatan_admin String?
+
+  dipesan_pada DateTime @default(now())
+  dikonfirmasi_pada DateTime?
+  dibelanjakan_pada DateTime?
+  dikemas_pada DateTime?
+  dikirim_pada DateTime?
+  selesai_pada DateTime?
+  dibatalkan_pada DateTime?
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+
+  user User @relation("CustomerPesanan", fields: [user_id], references: [id])
+  alamat Alamat @relation(fields: [alamat_id], references: [id])
+  kurir User? @relation("KurirPesanan", fields: [kurir_id], references: [id])
+  slot_pengiriman SlotPengiriman? @relation(fields: [slot_pengiriman_id], references: [id])
+  item ItemPesanan[]
+  pembayaran Pembayaran[]
+  pengiriman Pengiriman[]
+  verifikasi_cod VerifikasiCOD[]
+  log_status LogStatusPesanan[]
+  voucher VoucherPesanan[]
+}
+
+// ======================================================
+// ITEM PESANAN
+// ======================================================
+
+model ItemPesanan {
+  id BigInt @id @default(autoincrement())
+  pesanan_id BigInt
+  produk_id BigInt
+  nama_produk_snapshot String
+  tipe_pembelian TipePembelian
+  qty Float?
+  harga_satuan Int?
+  nominal Int?
+  qty_nominal Int?
+  harga_modal Int
+  harga_jual Int
+  subtotal Int
+  catatan String?
+  dibuat_pada DateTime @default(now())
+
+  pesanan Pesanan @relation(fields: [pesanan_id], references: [id], onDelete: Cascade)
+  produk Produk @relation(fields: [produk_id], references: [id])
+}
+
+// ======================================================
+// PEMBAYARAN & RELATED
+// ======================================================
+
+model MetodePembayaranTersedia {
+  id BigInt @id @default(autoincrement())
+  kode String @unique
+  nama String
+  provider String?
+  biaya_admin Int @default(0)
+  aktif Boolean @default(true)
+  dibuat_pada DateTime @default(now())
+
+  pembayaran Pembayaran[]
+}
+
+model Pembayaran {
+  id BigInt @id @default(autoincrement())
+  pesanan_id BigInt
+  metode_pembayaran_id BigInt
+  provider ProviderPembayaran
+  channel_pembayaran String?
+  kode_pembayaran String?
+  external_id String?
+  total_kotor Int
+  biaya_admin Int
+  total_bersih Int
+  url_pembayaran String?
+  qr_string String?
+  expired_pada DateTime?
+  dibayar_pada DateTime?
+  status_pembayaran StatusPembayaran
+  response_gateway Json?
+  dibuat_pada DateTime @default(now())
+  diupdate_pada DateTime @updatedAt
+
+  pesanan Pesanan @relation(fields: [pesanan_id], references: [id], onDelete: Cascade)
+  metode_pembayaran MetodePembayaranTersedia @relation(fields: [metode_pembayaran_id], references: [id])
+  callback CallbackPembayaran[]
+  refund RefundPembayaran[]
+  log LogPembayaran[]
+}
+
+model CallbackPembayaran {
+  id BigInt @id @default(autoincrement())
+  pembayaran_id BigInt
+  provider String
+  tipe_callback String
+  payload Json
+  signature_key String?
+  valid Boolean
+  diterima_pada DateTime @default(now())
+
+  pembayaran Pembayaran @relation(fields: [pembayaran_id], references: [id], onDelete: Cascade)
+}
+
+model RefundPembayaran {
+  id BigInt @id @default(autoincrement())
+  pembayaran_id BigInt
+  jumlah_refund Int
+  alasan String
+  status_refund String
+  direfund_pada DateTime?
+  dibuat_pada DateTime @default(now())
+
+  pembayaran Pembayaran @relation(fields: [pembayaran_id], references: [id], onDelete: Cascade)
+}
+
+model LogPembayaran {
+  id BigInt @id @default(autoincrement())
+  pembayaran_id BigInt
+  status_sebelum String
+  status_sesudah String
+  catatan String?
+  dibuat_pada DateTime @default(now())
+
+  pembayaran Pembayaran @relation(fields: [pembayaran_id], references: [id], onDelete: Cascade)
+}
+
+model VerifikasiCOD {
+  id BigInt @id @default(autoincrement())
+  pesanan_id BigInt
+  url_video_selfie String?
+  foto_rumah String?
+  latitude Float
+  longitude Float
+  akurasi_gps Float?
+  info_device String?
+  ip_address String?
+  diverifikasi_pada DateTime
+  dibuat_pada DateTime @default(now())
+
+  pesanan Pesanan @relation(fields: [pesanan_id], references: [id], onDelete: Cascade)
+}
+
+model Pengiriman {
+  id BigInt @id @default(autoincrement())
+  pesanan_id BigInt
+  kurir_id BigInt
+  status_pengiriman StatusPengiriman
+  mulai_pada DateTime?
+  sampai_pada DateTime?
+  foto_bukti String?
+  catatan String?
+  dibuat_pada DateTime @default(now())
+
+  pesanan Pesanan @relation(fields: [pesanan_id], references: [id], onDelete: Cascade)
+  kurir User @relation(fields: [kurir_id], references: [id])
+}
+
+model LogStatusPesanan {
+  id BigInt @id @default(autoincrement())
+  pesanan_id BigInt
+  user_id BigInt
+  status String
+  catatan String?
+  dibuat_pada DateTime @default(now())
+
+  pesanan Pesanan @relation(fields: [pesanan_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id])
+}
+
+// ======================================================
+// VOUCHER
+// ======================================================
+
+model Voucher {
+  id BigInt @id @default(autoincrement())
+  kode String @unique
+  jenis JenisVoucher
+  nilai Int
+  minimum_belanja Int?
+  maksimal_diskon Int?
+  batas_penggunaan Int?
+  total_digunakan Int @default(0)
+  expired_pada DateTime?
+  aktif Boolean @default(true)
+  dibuat_pada DateTime @default(now())
+
+  voucher_pesanan VoucherPesanan[]
+}
+
+model VoucherPesanan {
+  id BigInt @id @default(autoincrement())
+  pesanan_id BigInt
+  voucher_id BigInt
+  jumlah_diskon Int
+  dibuat_pada DateTime @default(now())
+
+  pesanan Pesanan @relation(fields: [pesanan_id], references: [id], onDelete: Cascade)
+  voucher Voucher @relation(fields: [voucher_id], references: [id])
+}
+
+// ======================================================
+// NOTIFIKASI & PENGELUARAN & LAPORAN
+// ======================================================
+
+model Notifikasi {
+  id BigInt @id @default(autoincrement())
+  user_id BigInt
+  judul String
+  isi String
+  dibaca Boolean @default(false)
+  dibuat_pada DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Pengeluaran {
+  id BigInt @id @default(autoincrement())
+  user_id BigInt
+  judul String
+  kategori String
+  jumlah Int
+  catatan String?
+  tanggal_pengeluaran DateTime
+  dibuat_pada DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model LaporanPendapatan {
+  id BigInt @id @default(autoincrement())
+  tanggal_laporan DateTime
+  total_pesanan Int
+  total_pendapatan Int
+  total_modal Int
+  total_keuntungan Int
+  total_ongkir Int
+  total_biaya_layanan Int
+  dibuat_pada DateTime @default(now())
+}
+
+model LaporanLabaRugi {
+  id BigInt @id @default(autoincrement())
+  tanggal_laporan DateTime
+  total_pemasukan Int
+  total_pengeluaran Int
+  laba_bersih Int
+  dibuat_pada DateTime @default(now())
+}
+
+
