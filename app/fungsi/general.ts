@@ -3,10 +3,16 @@ import { NextResponse } from "next/server";
 import path from "path";
 import fs  from "fs";
 import { genSaltSync, hashSync, } from "bcrypt-ts";
-import { PrismaClient } from "@prisma/client/extension";
-
-
- export const prisma = new PrismaClient()
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaClient } from "../generated/prisma/client";
+const adapter = new PrismaMariaDb({
+  host: process.env.DATABASE_HOST,
+  user: process.env.DATABASE_USER,
+  password: process.env.DATABASE_PASSWORD,
+  database: process.env.DATABASE_NAME,
+  connectionLimit: 5,
+});
+export const prisma = new PrismaClient({ adapter });
 
  //  Buat rspon untuk "Data Tidak Ditemukan"
 export const getResponseNotFound =()=>{

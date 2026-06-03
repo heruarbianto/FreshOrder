@@ -26,6 +26,7 @@ enum RoleUser {
 enum TipePembelian {
   FIXED
   NOMINAL
+  WEIGHT
 }
 
 enum MetodePembayaran {

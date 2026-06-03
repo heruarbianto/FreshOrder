@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { generateOTP, secret } from "@/app/fungsi/auth";
-import { prisma } from "@/app/fungsi/general";
-import { SignJWT } from "jose";
+import { generateOTP } from "@/app/fungsi/auth";
+import { prisma, setBcrypt } from "@/app/fungsi/general";
 // Schema Validasi dengan Zod
 const requestOTPSchema = z.object({
   email: z
@@ -12,7 +11,7 @@ const requestOTPSchema = z.object({
     .max(255, "Email terlalu panjang")
     .trim()
     .toLowerCase(),
-
+  
   purpose: z
     .enum(["REGISTER", "LOGIN", "FORGOT_PASSWORD", "CHANGE_EMAIL"])
     .default("REGISTER"),
@@ -24,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     // === Validasi Input ===
     const validation = requestOTPSchema.safeParse(body);
-
+    
     if (!validation.success) {
       return NextResponse.json(
         {
@@ -69,12 +68,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (
-      (purpose === "LOGIN" ||
-        purpose === "FORGOT_PASSWORD" ||
-        purpose === "CHANGE_EMAIL") &&
-      !existingUser
-    ) {
+    if ((purpose === "LOGIN" || purpose === "FORGOT_PASSWORD" || purpose === "CHANGE_EMAIL") && !existingUser) {
       return NextResponse.json(
         { success: false, message: "Email tidak ditemukan" },
         { status: 404 }
@@ -94,7 +88,7 @@ export async function POST(req: NextRequest) {
     await prisma.emailOtp.create({
       data: {
         email,
-        otp,
+        otp: setBcrypt(otp),
         purpose,
         expiredAt,
       },
@@ -104,25 +98,18 @@ export async function POST(req: NextRequest) {
     // await sendOTPEmail({ email, otp, purpose, expiresInMinutes });
 
     // Log untuk development
-    console.log(
-      `[OTP Requested] Email: ${email} | Purpose: ${purpose} | OTP: ${otp}`
-    );
-    const registerToken = await new SignJWT({
-      email: "user@gmail.com",
-      type: "register",
-    })
-      .setProtectedHeader({ alg: "HS256" }) // ✅ ini yang benar
-      .setIssuedAt()
-      .setExpirationTime("10m") // ⏱️ penting buat OTP
-      .sign(secret);
+    console.log(`[OTP Requested] Email: ${email} | Purpose: ${purpose} | OTP: ${otp}`);
 
     return NextResponse.json({
       success: true,
       message: "OTP berhasil dikirim ke email Anda",
       data: {
-        registerToken, // Token ini bisa digunakan untuk validasi di endpoint verifikasi OTP
+        email,
+        purpose,
+        expiresInMinutes,
       },
     });
+
   } catch (error: any) {
     console.error("Request OTP Error:", error);
 
